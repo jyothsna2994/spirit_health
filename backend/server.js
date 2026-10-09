@@ -7,16 +7,32 @@ const multer = require("multer");
 const { generate } = require("./src/services/gemini");
 
 const app = express();
-app.use(cors());
+const corsOrigins = (process.env.CORS_ORIGINS || (config.isProduction ? "" : "*"))
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+if (config.isProduction && corsOrigins.length === 0) {
+  throw new Error("CORS_ORIGINS must be configured in production.");
+}
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      callback(null, !origin || corsOrigins.includes("*") || corsOrigins.includes(origin));
+    },
+  })
+);
 app.use(express.json({ limit: "1mb" }));
 
 /* ---------- public ---------- */
 
 app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
+  const databaseConnected = mongoose.connection.readyState === 1;
+  res.status(databaseConnected ? 200 : 503).json({
+    success: databaseConnected,
     message: "Spirit Health Backend is running",
-    database: mongoose.connection.readyState === 1 ? "connected" : "not connected",
+    database: databaseConnected ? "connected" : "not connected",
     mockAi: config.mockAi,
   });
 });
@@ -65,6 +81,10 @@ app.use((error, req, res, next) => {
 
 /* ---------- start ---------- */
 async function connectMongoDB() {
+  if (!config.mongoUri) {
+    throw new Error("MONGODB_URI must be configured before starting the API.");
+  }
+
   try {
     await mongoose.connect(config.mongoUri, {
       serverSelectionTimeoutMS: 30000,
@@ -77,15 +97,19 @@ async function connectMongoDB() {
   } catch (error) {
     console.error("MongoDB connection failed:", error.message);
     console.error("MongoDB readyState:", mongoose.connection.readyState);
+    throw error;
   }
 }
 
 if (require.main === module) {
   connectMongoDB().then(() => {
-    app.listen(config.port, () => {
+    app.listen(config.port, "0.0.0.0", () => {
       console.log(`Spirit Health Backend running on http://localhost:${config.port}`);
       console.log(config.mockAi ? "MOCK_AI is ON - Gemini will not be called" : `Gemini API key loaded: ${!!config.geminiApiKey}`);
     });
+  }).catch((error) => {
+    console.error("Backend startup aborted:", error.message);
+    process.exitCode = 1;
   });
 }
 

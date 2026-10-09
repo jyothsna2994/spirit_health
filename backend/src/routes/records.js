@@ -124,13 +124,11 @@ router.post("/upload", upload.single("document"), async (req, res) => {
   }
 
   const dateFromDocument = Boolean(extraction.documentDate);
-const documentDate = extraction.documentDate || new Date();
+  const documentDate = extraction.documentDate || new Date();
 
-// Health timeline date = 10 days after the report date
-const timelineDate = new Date(documentDate);
-timelineDate.setDate(timelineDate.getDate() + 10);
-
-const record = new HealthRecord({
+  // Health timeline date = 10 days after the report date
+  const timelineDate = new Date(documentDate);
+  timelineDate.setDate(timelineDate.getDate() + 10);
 
   const record = new HealthRecord({
     userId,
@@ -139,9 +137,9 @@ const record = new HealthRecord({
     dateFromDocument,
     abnormalFindings: buildAbnormalFindings(extraction.tests, summary?.abnormalExplanations),
     timelineEvent: {
-  date: timelineDate.toISOString().slice(0, 10),
-  event: extraction.title
-},
+      date: timelineDate.toISOString().slice(0, 10),
+      event: extraction.title,
+    },
     mode: config.mockAi ? "mock" : "gemini",
     aiModel: model,
     summaryStatus: summary ? "ready" : "pending",

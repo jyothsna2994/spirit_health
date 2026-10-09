@@ -40,6 +40,24 @@ npx expo start            # press a / i / w, or scan the QR code with Expo Go
 ```
 The app finds the backend automatically (LAN IP of the Expo dev server). Override with `EXPO_PUBLIC_API_URL=http://<ip>:5000`.
 
+## Deploy on Render
+
+The repository includes a [`render.yaml`](./render.yaml) Blueprint for two Render services: a native Node.js API and a static Expo web export. Docker is not needed. The Expo app is hosted as a website; publishing Android/iOS apps requires a separate EAS/app-store build.
+
+1. Create a MongoDB Atlas database and database user. Copy its TLS-enabled connection string; allow Render to connect in Atlas Network Access. Keep the database user limited to this application's database.
+2. Push this repository to GitHub, then in Render choose **New + → Blueprint** and connect the repository containing `render.yaml`.
+3. Enter the requested secret values:
+   - `MONGODB_URI`: the Atlas connection string.
+   - `GEMINI_API_KEY`: a Google AI Studio API key.
+   - `CORS_ORIGINS`: the exact public URL of the `spirit-health-web` static site, for example `https://spirit-health-web.onrender.com` (no trailing slash).
+   - `EXPO_PUBLIC_API_URL`: the exact public URL of the `spirit-health-api` web service, for example `https://spirit-health-api.onrender.com`.
+   Render generates `JWT_SECRET`; do not replace it with a client-side variable. The frontend API URL is embedded at build time, so rebuild the static site after changing it.
+4. Wait for both services to deploy. The API health check is `/api/health`; it returns HTTP 200 only after MongoDB connects. The web service publishes the Expo `dist` directory.
+
+The API's uploads are processed in memory and health records are stored in MongoDB; the application does not rely on a Render disk. Render's free web services may sleep when idle. Set `MOCK_AI=false` for real Gemini processing (the Blueprint default); never put API keys in frontend `EXPO_PUBLIC_*` variables.
+
+For local configuration, copy `backend/.env.example` to `backend/.env` and `frontend/.env.example` to `frontend/.env`. Those local files are ignored by Git. To build the web app locally with a chosen API, set `EXPO_PUBLIC_API_URL` in the environment before running `npx expo export --platform web`.
+
 ### Demo without Atlas or Gemini quota
 ```bash
 cd backend

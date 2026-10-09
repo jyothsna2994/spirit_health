@@ -64,14 +64,6 @@ router.post("/register", async (req, res) => {
       gender: gender || "",
     });
 
-    console.log("================================");
-    console.log("NEW USER REGISTERED");
-    console.log("Email:", cleanEmail);
-    console.log("Password length:", cleanPassword.length);
-    console.log("Hash starts with:", hashedPassword.substring(0, 4));
-    console.log("User ID:", user._id.toString());
-    console.log("================================");
-
     res.status(201).json({
       success: true,
       message: "Account created successfully.",
@@ -107,8 +99,6 @@ router.post("/login", async (req, res) => {
     });
 
     if (!user) {
-      console.log("LOGIN: user not found:", cleanEmail);
-
       return res.status(401).json({
         success: false,
         message: "Incorrect email or password.",
@@ -119,17 +109,6 @@ router.post("/login", async (req, res) => {
       cleanPassword,
       user.password
     );
-
-    console.log("================================");
-    console.log("LOGIN ATTEMPT");
-    console.log("Email:", cleanEmail);
-    console.log("Password length:", cleanPassword.length);
-    console.log(
-      "Stored hash starts with:",
-      user.password?.substring(0, 4)
-    );
-    console.log("Password matches:", passwordMatches);
-    console.log("================================");
 
     if (!passwordMatches) {
       return res.status(401).json({
