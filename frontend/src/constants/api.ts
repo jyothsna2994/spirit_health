@@ -33,4 +33,4 @@ function resolveApiUrl(): string {
     : `http://localhost:${BACKEND_PORT}`;
 }
 
-export const API_URL = "https://spirit-health-api-x78j.onrender.com";
+export const API_URL = resolveApiUrl();

@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { API_URL } from "../constants/api";
+import { notify } from "../lib/dialog";
 import { saveSession } from "../lib/session";
 
 export default function AuthScreen() {
@@ -36,7 +37,7 @@ export default function AuthScreen() {
      ========================= */
 
   if (!cleanEmail || !password) {
-    Alert.alert(
+    notify(
       "Missing Details",
       "Please enter your email and password."
     );
@@ -44,7 +45,7 @@ export default function AuthScreen() {
   }
 
   if (!cleanEmail.includes("@")) {
-    Alert.alert(
+    notify(
       "Invalid Email",
       "Please enter a valid email address."
     );
@@ -52,7 +53,7 @@ export default function AuthScreen() {
   }
 
   if (password.length < 6) {
-    Alert.alert(
+    notify(
       "Password Too Short",
       "Password must contain at least 6 characters."
     );
@@ -65,7 +66,7 @@ export default function AuthScreen() {
 
   if (!isLogin) {
     if (!cleanName) {
-      Alert.alert(
+      notify(
         "Missing Name",
         "Please enter your full name."
       );
@@ -73,7 +74,7 @@ export default function AuthScreen() {
     }
 
     if (password !== confirmPassword) {
-      Alert.alert(
+      notify(
         "Password Mismatch",
         "Passwords do not match."
       );
@@ -117,20 +118,30 @@ export default function AuthScreen() {
         );
       }
 
-      Alert.alert(
-        "Registration Successful",
-        "Your Spirit Health account has been created.",
-        [
-          {
-            text: "Continue to Login",
-            onPress: () => {
-              setIsLogin(true);
-              setPassword("");
-              setConfirmPassword("");
+      if (Platform.OS === "web") {
+        notify(
+          "Registration Successful",
+          "Your Spirit Health account has been created."
+        );
+        setIsLogin(true);
+        setPassword("");
+        setConfirmPassword("");
+      } else {
+        Alert.alert(
+          "Registration Successful",
+          "Your Spirit Health account has been created.",
+          [
+            {
+              text: "Continue to Login",
+              onPress: () => {
+                setIsLogin(true);
+                setPassword("");
+                setConfirmPassword("");
+              },
             },
-          },
-        ]
-      );
+          ]
+        );
+      }
 
     } catch (error: any) {
       console.error(
@@ -138,7 +149,7 @@ export default function AuthScreen() {
         error
       );
 
-      Alert.alert(
+      notify(
         "Registration Failed",
         error?.message ||
           "Could not connect to the Spirit Health server."
@@ -213,7 +224,7 @@ export default function AuthScreen() {
       error
     );
 
-    Alert.alert(
+    notify(
       "Login Failed",
       error?.message ||
         "Could not connect to the Spirit Health server."
