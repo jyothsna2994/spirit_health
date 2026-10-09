@@ -26,7 +26,6 @@ services:
   - type: web
     name: spirit-health-web
     runtime: static
-    plan: free
     rootDir: frontend
     buildCommand: npm ci && npx expo export --platform web
     staticPublishPath: dist
