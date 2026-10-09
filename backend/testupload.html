@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Spirit Health Backend Test</title>
+</head>
+
+<body>
+
+  <h2>Spirit Health - Document Upload Test</h2>
+
+  <input
+    type="file"
+    id="document"
+    accept=".pdf,.jpg,.jpeg,.png"
+  />
+
+  <br><br>
+
+  <button onclick="uploadDocument()">
+    Upload & Analyze
+  </button>
+
+  <pre id="result"></pre>
+
+  <script>
+    async function uploadDocument() {
+
+      const fileInput =
+        document.getElementById("document");
+
+      const result =
+        document.getElementById("result");
+
+      if (!fileInput.files.length) {
+        result.textContent =
+          "Please select a document.";
+        return;
+      }
+
+      const formData =
+        new FormData();
+
+      formData.append(
+        "document",
+        fileInput.files[0]
+      );
+
+      result.textContent =
+        "Uploading and analyzing... Please wait.";
+
+      try {
+
+        const response =
+          await fetch(
+            "http://localhost:5000/api/upload",
+            {
+              method: "POST",
+              body: formData
+            }
+          );
+
+        const data =
+          await response.json();
+
+        result.textContent =
+          JSON.stringify(
+            data,
+            null,
+            2
+          );
+
+      } catch (error) {
+
+        result.textContent =
+          "ERROR: " +
+          error.message;
+      }
+    }
+  </script>
+
+</body>
+</html>
