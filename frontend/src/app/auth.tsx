@@ -28,6 +28,15 @@ export default function AuthScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  // =========================
+// RESET PASSWORD
+// =========================
+  const [forgotPassword, setForgotPassword] = useState(false);
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+
   const handleSubmit = async () => {
   const cleanName = fullName.trim();
   const cleanEmail = email.trim().toLowerCase();
@@ -233,6 +242,183 @@ export default function AuthScreen() {
     setLoading(false);
   }
 };
+  // ==========================================
+// FORGOT PASSWORD
+// ==========================================
+const handleForgotPassword = async () => {
+  const cleanEmail = email.trim().toLowerCase();
+
+  if (!cleanEmail) {
+    notify(
+      "Missing Email",
+      "Please enter your registered email address."
+    );
+    return;
+  }
+
+  if (!cleanEmail.includes("@")) {
+    notify(
+      "Invalid Email",
+      "Please enter a valid email address."
+    );
+    return;
+  }
+
+  try {
+    setResetLoading(true);
+
+    console.log("Sending password reset request...");
+
+    const response = await fetch(
+      `${API_URL}/api/auth/forgot-password`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: cleanEmail,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    console.log(
+      "Forgot password response:",
+      data.success ? "success" : data.message
+    );
+
+    if (!response.ok || !data.success) {
+      throw new Error(
+        data.message || "Could not generate reset code."
+      );
+    }
+
+    // Save email for the next reset step
+    setEmail(cleanEmail);
+
+    notify(
+      "Reset Code Sent",
+      "Your reset code has been generated. Please enter the 6-digit code."
+    );
+
+    // Show reset password fields
+    setForgotPassword(true);
+
+  } catch (error: any) {
+    console.error(
+      "Forgot password error:",
+      error
+    );
+
+    notify(
+      "Reset Password Failed",
+      error?.message ||
+        "Could not connect to the Spirit Health server."
+    );
+  } finally {
+    setResetLoading(false);
+  }
+};
+ // ==========================================
+// RESET PASSWORD
+// ==========================================
+const handleResetPassword = async () => {
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanCode = resetCode.trim();
+
+  if (!cleanEmail || !cleanCode || !newPassword || !confirmNewPassword) {
+    notify(
+      "Missing Details",
+      "Please enter the reset code and your new password."
+    );
+    return;
+  }
+
+  if (cleanCode.length !== 6) {
+    notify(
+      "Invalid Reset Code",
+      "Please enter the 6-digit reset code."
+    );
+    return;
+  }
+
+  if (newPassword.length < 6) {
+    notify(
+      "Password Too Short",
+      "New password must contain at least 6 characters."
+    );
+    return;
+  }
+
+  if (newPassword !== confirmNewPassword) {
+    notify(
+      "Password Mismatch",
+      "New passwords do not match."
+    );
+    return;
+  }
+
+  try {
+    setResetLoading(true);
+
+    console.log("Resetting password...");
+
+    const response = await fetch(
+      `${API_URL}/api/auth/reset-password`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: cleanEmail,
+          resetCode: cleanCode,
+          newPassword: newPassword,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    console.log(
+      "Reset password response:",
+      data.success ? "success" : data.message
+    );
+
+    if (!response.ok || !data.success) {
+      throw new Error(
+        data.message || "Could not reset your password."
+      );
+    }
+
+    notify(
+      "Password Reset Successful",
+      "Your password has been changed. Please login with your new password."
+    );
+
+    // Clear reset fields
+    setResetCode("");
+    setNewPassword("");
+    setConfirmNewPassword("");
+    setForgotPassword(false);
+
+  } catch (error: any) {
+    console.error(
+      "Reset password error:",
+      error
+    );
+
+    notify(
+      "Reset Password Failed",
+      error?.message ||
+        "Could not reset your password."
+    );
+  } finally {
+    setResetLoading(false);
+  }
+};
 
   return (
     <KeyboardAvoidingView
@@ -295,128 +481,295 @@ export default function AuthScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* FULL NAME */}
-          {!isLogin && (
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Full Name</Text>
+          {/* AUTH / RESET PASSWORD CONTENT */}
 
-              <TextInput
-                value={fullName}
-                onChangeText={setFullName}
-                placeholder="Enter your full name"
-                placeholderTextColor="#94A3B8"
-                style={styles.input}
-                autoCapitalize="words"
-              />
-            </View>
-          )}
+{forgotPassword ? (
+  /* =========================
+     RESET PASSWORD
+     ========================= */
+  <View>
+    <Text
+      style={{
+        textAlign: "center",
+        fontSize: 22,
+        fontWeight: "800",
+        color: "#173F67",
+        marginBottom: 8,
+      }}
+    >
+      Reset Your Password
+    </Text>
 
-          {/* EMAIL */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
+    <Text
+      style={{
+        textAlign: "center",
+        color: "#718096",
+        fontSize: 13,
+        marginBottom: 22,
+      }}
+    >
+      Enter your email and reset code to create a new password
+    </Text>
 
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Enter your email"
-              placeholderTextColor="#94A3B8"
-              style={styles.input}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
+    {/* EMAIL */}
+    <View style={styles.inputContainer}>
+      <Text style={styles.label}>Email</Text>
 
-          {/* PASSWORD */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
+      <TextInput
+        value={email}
+        onChangeText={setEmail}
+        placeholder="Enter your registered email"
+        placeholderTextColor="#94A3B8"
+        style={styles.input}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+    </View>
 
-            <View style={styles.passwordBox}>
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                placeholderTextColor="#94A3B8"
-                style={styles.passwordInput}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-              />
+    {/* GET RESET CODE */}
+    <TouchableOpacity
+      style={[
+        styles.submitButton,
+        resetLoading && { opacity: 0.6 },
+      ]}
+      onPress={handleForgotPassword}
+      disabled={resetLoading}
+    >
+      <Text style={styles.submitText}>
+        {resetLoading ? "Please wait..." : "Get Reset Code"}
+      </Text>
+    </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <Text style={styles.showText}>
-                  {showPassword ? "Hide" : "Show"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+    {/* RESET CODE */}
+    <View style={[styles.inputContainer, { marginTop: 16 }]}>
+      <Text style={styles.label}>Reset Code</Text>
 
-          {/* CONFIRM PASSWORD */}
-          {!isLogin && (
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Confirm Password</Text>
+      <TextInput
+        value={resetCode}
+        onChangeText={setResetCode}
+        placeholder="Enter 6-digit reset code"
+        placeholderTextColor="#94A3B8"
+        style={styles.input}
+        keyboardType="number-pad"
+        maxLength={6}
+      />
+    </View>
 
-              <View style={styles.passwordBox}>
-                <TextInput
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Confirm your password"
-                  placeholderTextColor="#94A3B8"
-                  style={styles.passwordInput}
-                  secureTextEntry={!showConfirmPassword}
-                  autoCapitalize="none"
-                />
+    {/* NEW PASSWORD */}
+    <View style={styles.inputContainer}>
+      <Text style={styles.label}>New Password</Text>
 
-                <TouchableOpacity
-                  onPress={() =>
-                    setShowConfirmPassword(!showConfirmPassword)
-                  }
-                >
-                  <Text style={styles.showText}>
-                    {showConfirmPassword ? "Hide" : "Show"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+      <TextInput
+        value={newPassword}
+        onChangeText={setNewPassword}
+        placeholder="Enter new password"
+        placeholderTextColor="#94A3B8"
+        style={styles.input}
+        secureTextEntry
+        autoCapitalize="none"
+      />
+    </View>
 
-          {/* SUBMIT */}
+    {/* CONFIRM NEW PASSWORD */}
+    <View style={styles.inputContainer}>
+      <Text style={styles.label}>Confirm New Password</Text>
+
+      <TextInput
+        value={confirmNewPassword}
+        onChangeText={setConfirmNewPassword}
+        placeholder="Confirm new password"
+        placeholderTextColor="#94A3B8"
+        style={styles.input}
+        secureTextEntry
+        autoCapitalize="none"
+      />
+    </View>
+
+    {/* RESET PASSWORD BUTTON */}
+    <TouchableOpacity
+      style={[
+        styles.submitButton,
+        {
+          backgroundColor: "#173F67",
+        },
+        resetLoading && { opacity: 0.6 },
+      ]}
+      onPress={handleResetPassword}
+      disabled={resetLoading}
+    >
+      <Text style={styles.submitText}>
+        {resetLoading ? "Please wait..." : "Reset Password"}
+      </Text>
+    </TouchableOpacity>
+
+    {/* BACK TO LOGIN */}
+    <TouchableOpacity
+      onPress={() => {
+        setForgotPassword(false);
+        setResetCode("");
+        setNewPassword("");
+        setConfirmNewPassword("");
+      }}
+      style={{
+        alignItems: "center",
+        marginTop: 16,
+      }}
+    >
+      <Text style={styles.switchLink}>
+        ← Back to Login
+      </Text>
+    </TouchableOpacity>
+  </View>
+) : (
+  /* =========================
+     EXISTING LOGIN / REGISTER
+     ========================= */
+  <View>
+    {/* FULL NAME */}
+    {!isLogin && (
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Full Name</Text>
+
+        <TextInput
+          value={fullName}
+          onChangeText={setFullName}
+          placeholder="Enter your full name"
+          placeholderTextColor="#94A3B8"
+          style={styles.input}
+          autoCapitalize="words"
+        />
+      </View>
+    )}
+
+    {/* EMAIL */}
+    <View style={styles.inputContainer}>
+      <Text style={styles.label}>Email</Text>
+
+      <TextInput
+        value={email}
+        onChangeText={setEmail}
+        placeholder="Enter your email"
+        placeholderTextColor="#94A3B8"
+        style={styles.input}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+    </View>
+
+    {/* PASSWORD */}
+    <View style={styles.inputContainer}>
+      <Text style={styles.label}>Password</Text>
+
+      <View style={styles.passwordBox}>
+        <TextInput
+          value={password}
+          onChangeText={setPassword}
+          placeholder="Enter your password"
+          placeholderTextColor="#94A3B8"
+          style={styles.passwordInput}
+          secureTextEntry={!showPassword}
+          autoCapitalize="none"
+        />
+
+        <TouchableOpacity
+          onPress={() => setShowPassword(!showPassword)}
+        >
+          <Text style={styles.showText}>
+            {showPassword ? "Hide" : "Show"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+
+    {/* CONFIRM PASSWORD */}
+    {!isLogin && (
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Confirm Password</Text>
+
+        <View style={styles.passwordBox}>
+          <TextInput
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            placeholder="Confirm your password"
+            placeholderTextColor="#94A3B8"
+            style={styles.passwordInput}
+            secureTextEntry={!showConfirmPassword}
+            autoCapitalize="none"
+          />
+
           <TouchableOpacity
-            style={[
-              styles.submitButton,
-              loading && { opacity: 0.6 },
-            ]}
-            onPress={handleSubmit}
-            activeOpacity={0.8}
-            disabled={loading}
+            onPress={() =>
+              setShowConfirmPassword(!showConfirmPassword)
+            }
           >
-            <Text style={styles.submitText}>
-              {loading
-                ? "Please wait..."
-                : isLogin
-                ? "Login to Spirit Health"
-                : "Create Account"}
+            <Text style={styles.showText}>
+              {showConfirmPassword ? "Hide" : "Show"}
             </Text>
           </TouchableOpacity>
+        </View>
+      </View>
+    )}
 
-          {/* SWITCH */}
-          <View style={styles.switchRow}>
-            <Text style={styles.switchText}>
-              {isLogin
-                ? "Don't have an account?"
-                : "Already have an account?"}
-            </Text>
+    {/* SUBMIT */}
+    <TouchableOpacity
+      style={[
+        styles.submitButton,
+        loading && { opacity: 0.6 },
+      ]}
+      onPress={handleSubmit}
+      activeOpacity={0.8}
+      disabled={loading}
+    >
+      <Text style={styles.submitText}>
+        {loading
+          ? "Please wait..."
+          : isLogin
+          ? "Login to Spirit Health"
+          : "Create Account"}
+      </Text>
+    </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => setIsLogin(!isLogin)}
-            >
-              <Text style={styles.switchLink}>
-                {isLogin ? " Register" : " Login"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+    {/* FORGOT PASSWORD */}
+    {isLogin && (
+      <TouchableOpacity
+        onPress={() => {
+          setForgotPassword(true);
+          setResetCode("");
+          setNewPassword("");
+          setConfirmNewPassword("");
+        }}
+        disabled={resetLoading}
+        style={{
+          alignItems: "center",
+          marginTop: 12,
+        }}
+      >
+        <Text style={styles.forgotPasswordText}>
+          Forgot Password?
+        </Text>
+      </TouchableOpacity>
+    )}
 
+    {/* SWITCH */}
+    <View style={styles.switchRow}>
+      <Text style={styles.switchText}>
+        {isLogin
+          ? "Don't have an account?"
+          : "Already have an account?"}
+      </Text>
+
+      <TouchableOpacity
+        onPress={() => setIsLogin(!isLogin)}
+      >
+        <Text style={styles.switchLink}>
+          {isLogin ? " Register" : " Login"}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+)}
           {/* FEATURES */}
           <View style={styles.features}>
             <View style={styles.feature}>
@@ -636,4 +989,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 18,
   },
+  forgotPasswordText: {
+  color: "#2468A8",
+  fontSize: 13,
+  fontWeight: "700",
+},
 });

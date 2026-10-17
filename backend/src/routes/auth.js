@@ -133,4 +133,166 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// ==========================================
+// FORGOT PASSWORD - SEND RESET CODE
+// ==========================================
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required.",
+      });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+
+    const user = await User.findOne({
+      email: cleanEmail,
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "No account found with this email.",
+      });
+    }
+
+    // Generate 6-digit reset code
+    const resetCode = Math.floor(
+      100000 + Math.random() * 900000
+    ).toString();
+
+    // Code valid for 10 minutes
+    const resetCodeExpires = new Date(
+      Date.now() + 10 * 60 * 1000
+    );
+
+    user.resetCode = resetCode;
+    user.resetCodeExpires = resetCodeExpires;
+
+    await user.save();
+
+    console.log(
+      `PASSWORD RESET CODE for ${cleanEmail}: ${resetCode}`
+    );
+
+    // Demo/local version:
+    // The code is returned so we can test without email service.
+    res.json({
+      success: true,
+      message: "Reset code generated successfully.",
+      resetCode: resetCode,
+    });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Could not generate reset code.",
+    });
+  }
+});
+
+
+// ==========================================
+// RESET PASSWORD
+// ==========================================
+router.post("/reset-password", async (req, res) => {
+  try {
+    const {
+      email,
+      resetCode,
+      newPassword,
+    } = req.body || {};
+
+    if (!email || !resetCode || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Email, reset code and new password are required.",
+      });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanCode = String(resetCode).trim();
+    const cleanPassword = String(newPassword);
+
+    if (cleanPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "New password must contain at least 6 characters.",
+      });
+    }
+
+    const user = await User.findOne({
+      email: cleanEmail,
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "No account found with this email.",
+      });
+    }
+
+    // Check code
+    if (
+      !user.resetCode ||
+      user.resetCode !== cleanCode
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid reset code.",
+      });
+    }
+
+    // Check expiry
+    if (
+      !user.resetCodeExpires ||
+      user.resetCodeExpires < new Date()
+    ) {
+      user.resetCode = null;
+      user.resetCodeExpires = null;
+
+      await user.save();
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Reset code has expired. Please request a new code.",
+      });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(
+      cleanPassword,
+      10
+    );
+
+    user.password = hashedPassword;
+
+    // Clear reset code after successful reset
+    user.resetCode = null;
+    user.resetCodeExpires = null;
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message:
+        "Password reset successfully. Please login with your new password.",
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Could not reset password.",
+    });
+  }
+});
 module.exports = router;

@@ -5,8 +5,10 @@ const userSchema = new mongoose.Schema({
   fullName: { type: String, required: true, trim: true },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true }, // bcrypt hash
+  // Password reset
+resetCode: { type: String, default: null },
+resetCodeExpires: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
-
   preferredLanguage: { type: String, enum: LANGUAGE_CODES, default: "en" },
   dateOfBirth: Date,
   gender: { type: String, enum: ["male", "female", "other", ""], default: "" },
