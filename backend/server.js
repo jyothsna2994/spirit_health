@@ -24,6 +24,17 @@ app.use(
   })
 );
 app.use(express.json({ limit: "1mb" }));
+app.use((req, res, next) => {
+  console.log(`[REQUEST] ${req.method} ${req.originalUrl}`);
+
+  res.on("finish", () => {
+    console.log(
+      `[RESPONSE] ${req.method} ${req.originalUrl} ${res.statusCode}`
+    );
+  });
+
+  next();
+});
 
 /* ---------- public ---------- */
 
