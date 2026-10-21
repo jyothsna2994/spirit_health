@@ -24,6 +24,7 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.11.1",
     "multer": "^2.4.0",
+    "nodemailer": "^10.1.6",
     "sharp": "^0.35.5",
     "tesseract.js": "^7.0.0"
   },

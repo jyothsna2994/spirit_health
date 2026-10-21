@@ -1,9 +1,16 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
+const nodemailer = require("nodemailer");
 const User = require("../models/User");
 const { signToken, publicUser } = require("../middleware/auth");
-
 const router = express.Router();
+const emailTransporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_APP_PASSWORD,
+  },
+});
 
 router.post("/register", async (req, res) => {
   try {
@@ -153,10 +160,12 @@ router.post("/forgot-password", async (req, res) => {
       email: cleanEmail,
     });
 
+    // Do not reveal whether an account exists
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "No account found with this email.",
+      return res.json({
+        success: true,
+        message:
+          "If an account exists with this email, a reset code has been sent.",
       });
     }
 
@@ -175,27 +184,41 @@ router.post("/forgot-password", async (req, res) => {
 
     await user.save();
 
-    console.log(
-      `PASSWORD RESET CODE for ${cleanEmail}: ${resetCode}`
-    );
+    // Send reset code to the registered email
+    await emailTransporter.sendMail({
+      from: `"Spirit Health" <${process.env.EMAIL_USER}>`,
+      to: user.email,
+      subject: "Spirit Health - Password Reset Code",
+      text: `Hello ${user.fullName},
 
-    // Demo/local version:
-    // The code is returned so we can test without email service.
+Your Spirit Health password reset code is:
+
+${resetCode}
+
+This code is valid for 10 minutes.
+
+If you did not request a password reset, please ignore this email.
+
+Regards,
+Spirit Health Team`,
+    });
+
+    console.log(`Password reset email sent to ${user.email}`);
+
     res.json({
       success: true,
-      message: "Reset code generated successfully.",
-      resetCode: resetCode,
+      message:
+        "If an account exists with this email, a reset code has been sent.",
     });
   } catch (error) {
     console.error("Forgot password error:", error);
 
     res.status(500).json({
       success: false,
-      message: "Could not generate reset code.",
+      message: "Could not send reset code. Please try again.",
     });
   }
 });
-
 
 // ==========================================
 // RESET PASSWORD
