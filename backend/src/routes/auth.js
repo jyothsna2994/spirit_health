@@ -183,7 +183,12 @@ router.post("/forgot-password", async (req, res) => {
     user.resetCodeExpires = resetCodeExpires;
 
     await user.save();
-
+    console.log("EMAIL DEBUG:", {
+  emailUserExists: !!process.env.EMAIL_USER,
+  emailPasswordExists: !!process.env.EMAIL_APP_PASSWORD,
+  emailUser: process.env.EMAIL_USER ? "SET" : "MISSING",
+});
+  
     // Send reset code to the registered email
     await emailTransporter.sendMail({
       from: `"Spirit Health" <${process.env.EMAIL_USER}>`,
