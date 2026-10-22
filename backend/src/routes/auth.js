@@ -1,19 +1,8 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
-const nodemailer = require("nodemailer");
 const User = require("../models/User");
 const { signToken, publicUser } = require("../middleware/auth");
 const router = express.Router();
-const emailTransporter = nodemailer.createTransport({
-  service: "gmail",
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_APP_PASSWORD,
-  },
-});
 
 
 router.post("/register", async (req, res) => {
@@ -194,40 +183,48 @@ router.post("/forgot-password", async (req, res) => {
 });
 
     // Send reset code to the registered email
-    await emailTransporter.sendMail({
-      from: `"Spirit Health" <${process.env.EMAIL_USER}>`,
-      to: user.email,
+    
+const emailResponse = await fetch(
+  "https://api.brevo.com/v3/smtp/email",
+  {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "api-key": process.env.BREVO_API_KEY,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: {
+        name: "Spirit Health",
+        email: "spirithealthteam@gmail.com",
+      },
+      to: [{ email: user.email }],
       subject: "Spirit Health - Password Reset Code",
-      text: `Hello ${user.fullName},
+      textContent: `Hello ${user.fullName},
 
 Your Spirit Health password reset code is:
 
-  ${resetCode}
+${resetCode}
 
 This code is valid for 10 minutes.
 
-If you did not request a password reset, please ignore this email.
+If you did not request a password reset,
+please ignore this email.
 
 Regards,
 Spirit Health Team`,
-    });
-
-    console.log(`Password reset email sent to ${user.email}`);
-
-    res.json({
-      success: true,
-      message:
-        "If an account exists with this email, a reset code has been sent.",
-    });
-  } catch (error) {
-    console.error("Forgot password error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Could not send reset code. Please try again.",
-    });
+    }),
   }
-});
+);
+
+if (!emailResponse.ok) {
+  const errorText = await emailResponse.text();
+  console.error("Brevo email error:", emailResponse.status, errorText);
+  throw new Error("Brevo could not send the reset email.");
+}
+
+console.log("Brevo accepted password reset email request");
+
 
 // ==========================================
 // RESET PASSWORD
