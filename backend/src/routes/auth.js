@@ -6,11 +6,15 @@ const { signToken, publicUser } = require("../middleware/auth");
 const router = express.Router();
 const emailTransporter = nodemailer.createTransport({
   service: "gmail",
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_APP_PASSWORD,
   },
 });
+
 
 router.post("/register", async (req, res) => {
   try {
@@ -188,7 +192,7 @@ router.post("/forgot-password", async (req, res) => {
   emailPasswordExists: !!process.env.EMAIL_APP_PASSWORD,
   emailUser: process.env.EMAIL_USER ? "SET" : "MISSING",
 });
-  
+
     // Send reset code to the registered email
     await emailTransporter.sendMail({
       from: `"Spirit Health" <${process.env.EMAIL_USER}>`,
@@ -198,7 +202,7 @@ router.post("/forgot-password", async (req, res) => {
 
 Your Spirit Health password reset code is:
 
-${resetCode}
+  ${resetCode}
 
 This code is valid for 10 minutes.
 
