@@ -6,26 +6,30 @@ const multer = require("multer");
 const config = require("../config");
 const { requireAuth } = require("../middleware/auth");
 const { HealthRecord } = require("../models/HealthRecord");
+const FamilyMember = require("../models/FamilyMember");
 const { extractDocument } = require("../services/extraction");
 const { summarizeRecord, buildAbnormalFindings } = require("../services/summarize");
 const { serializeRecord } = require("../services/profile");
 const { recordToDocumentBundle } = require("../services/fhir");
 const { ocrImage } = require("../services/ocrFallback");
 const { LANGUAGE_CODES, CORE_LANGUAGES } = require("../languages");
-
 const router = express.Router();
 router.use(requireAuth);
-
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/jpg", "application/pdf"];
+const MAX_FILES = 5;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: {
+    fileSize: MAX_FILE_SIZE,
+    files: MAX_FILES,
+  },
   fileFilter: (req, file, cb) =>
-    ALLOWED_TYPES.includes(file.mimetype) ? cb(null, true) : cb(new Error("Only JPG, PNG and PDF files are allowed")),
+    ALLOWED_TYPES.includes(file.mimetype)
+      ? cb(null, true)
+      : cb(new Error("Only JPG, PNG and PDF files are allowed")),
 });
-
 const MIRROR = { en: "healthSummary", hi: "hindiSummary", te: "teluguSummary" };
-
 /** Keep the first-prototype summary fields in step with `summaries`, so older screens keep working. */
 function applySummaries(record, summaries) {
   for (const [lang, text] of Object.entries(summaries)) {
@@ -52,6 +56,7 @@ function uploadResponse(record, extra = {}) {
       healthSummary: r.summaries.en || "",
       teluguSummary: r.summaries.te || "",
       hindiSummary: r.summaries.hi || "",
+      tamilSummary: r.summaries.ta || "",
       timelineEvent: r.timelineEvent,
     },
     ...extra,
@@ -86,78 +91,168 @@ async function aiFailure(res, error, file) {
     extractedText,
   });
 }
-
-router.post("/upload", upload.single("document"), async (req, res) => {
-  if (!req.file) return res.status(400).json({ success: false, message: "No medical document uploaded" });
-
-  const userId = String(req.user._id);
-  const contentHash = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
-
-  const existing = await HealthRecord.findOne({ userId, contentHash });
-  if (existing) {
-    return res.json(uploadResponse(existing, { duplicate: true, message: "This document is already in your health timeline." }));
-  }
-
-  let extraction, model;
-  try {
-    ({ extraction, model } = await extractDocument(req.file, { userGender: req.user.gender }));
-  } catch (error) {
-    return aiFailure(res, error, req.file);
-  }
-
-  const hasContent =
-    extraction.medicines.length || extraction.tests.length || extraction.diagnoses.length || extraction.advice.length || extraction.followUp;
-  if (!hasContent) {
-    return res.status(422).json({
+router.post(
+  "/upload",
+  upload.array("document", MAX_FILES),
+  async (req, res) => {
+    const files = req.files || [];
+    if (!files.length) {
+      return res.status(400).json({
+        success: false,
+        message: "No medical document uploaded.",
+      });
+    }
+    // Multiple files must be images. Keep single-PDF uploads working.
+    if (
+      files.length > 1 &&
+      files.some((file) => !file.mimetype.startsWith("image/"))
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "For a multi-page upload, please select JPG or PNG images only. PDFs can still be uploaded individually.",
+      });
+    }
+    const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+    if (totalSize > 25 * 1024 * 1024) {
+      return res.status(413).json({
+        success: false,
+        message: "The combined upload must be 25 MB or less.",
+      });
+    }
+    const userId = String(req.user._id);
+    // Validate the selected family member before processing.
+const familyMemberId = String(req.body?.familyMemberId || "").trim();
+if (familyMemberId) {
+  if (!mongoose.isValidObjectId(familyMemberId)) {
+    return res.status(400).json({
       success: false,
-      message: "We could not find medical information in this file. Please try a clearer, well-lit photo of the whole page.",
-      extractionNotes: extraction.extractionNotes,
+      message: "Invalid family member ID.",
     });
   }
-
-  let summary = null;
-  try {
-    summary = await summarizeRecord(extraction, CORE_LANGUAGES);
-  } catch (error) {
-    /* The record is still worth saving; the app offers "Generate summary" later. */
-    console.error("Summary generation failed:", String(error.message).slice(0, 200));
-  }
-
-  const dateFromDocument = Boolean(extraction.documentDate);
-  const documentDate = extraction.documentDate || new Date();
-
-  // Health timeline date = 10 days after the report date
-  const timelineDate = new Date(documentDate);
-  timelineDate.setDate(timelineDate.getDate() + 10);
-
-  const record = new HealthRecord({
-    userId,
-    ...extraction,
-    documentDate,
-    dateFromDocument,
-    abnormalFindings: buildAbnormalFindings(extraction.tests, summary?.abnormalExplanations),
-    timelineEvent: {
-      date: timelineDate.toISOString().slice(0, 10),
-      event: extraction.title,
-    },
-    mode: config.mockAi ? "mock" : "gemini",
-    aiModel: model,
-    summaryStatus: summary ? "ready" : "pending",
-    fileName: req.file.originalname,
-    mimeType: req.file.mimetype,
-    contentHash,
+  const familyMember = await FamilyMember.findOne({
+    _id: familyMemberId,
+    userId: req.user._id,
   });
-  if (summary) applySummaries(record, summary.summaries);
-  await record.save();
-
-  res.json(
-    uploadResponse(record, {
-      message: summary
-        ? "Medical document processed successfully."
-        : "Document read successfully, but the plain-language summary is not ready yet. Open the record to generate it.",
-    })
-  );
+  if (!familyMember) {
+    return res.status(404).json({
+      success: false,
+      message: "Family member not found.",
+    });
+  }
+}
+    // Hash all files in order to identify this report as one record.
+    const hasher = crypto.createHash("sha256");
+    for (const file of files) {
+      hasher.update(String(file.buffer.length));
+      hasher.update(":");
+      hasher.update(file.buffer);
+    }
+    const contentHash = hasher.digest("hex");
+   const existing = await HealthRecord.findOne({
+  userId,
+  familyMemberId: familyMemberId || null,
+  contentHash,
 });
+    if (existing) {
+      return res.json(
+        uploadResponse(existing, {
+          duplicate: true,
+          message: "This report is already in your health timeline.",
+        })
+      );
+    }
+    let extraction;
+    let model;
+    try {
+      ({ extraction, model } = await extractDocument(
+        files.length === 1 ? files[0] : files,
+        { userGender: req.user.gender }
+      ));
+    } catch (error) {
+      return aiFailure(res, error, files[0]);
+    }
+    const hasContent =
+      extraction.medicines.length ||
+      extraction.tests.length ||
+      extraction.diagnoses.length ||
+      extraction.advice.length ||
+      extraction.followUp;
+    if (!hasContent) {
+      return res.status(422).json({
+        success: false,
+        message:
+          "We could not find medical information in these files. Please upload clearer images.",
+        extractionNotes: extraction.extractionNotes,
+      });
+    }
+    let summary = null;
+    try {
+      summary = await summarizeRecord(extraction, CORE_LANGUAGES);
+    } catch (error) {
+      console.error(
+        "Summary generation failed:",
+        String(error.message).slice(0, 200)
+      );
+    }
+    const dateFromDocument = Boolean(extraction.documentDate);
+    const documentDate = extraction.documentDate || new Date();
+    // Preserve existing timeline behavior.
+    const timelineDate = new Date(documentDate);
+    timelineDate.setDate(timelineDate.getDate() + 10);
+    const isMultiPage = files.length > 1;
+    const folderName = isMultiPage
+      ? `Medical Report - ${documentDate.toISOString().slice(0, 10)}`
+      : "";
+    const pages = files.map((file, index) => ({
+      pageNumber: index + 1,
+      fileName: file.originalname,
+      mimeType: file.mimetype,
+      fileSize: file.size,
+      storageKey: "",
+    }));
+    const record = new HealthRecord({
+      userId,
+      ...extraction,
+      familyMemberId: familyMemberId || null,
+      documentDate,
+      dateFromDocument,
+      abnormalFindings: buildAbnormalFindings(
+        extraction.tests,
+        summary?.abnormalExplanations
+      ),
+      timelineEvent: {
+        date: timelineDate.toISOString().slice(0, 10),
+        event: extraction.title,
+      },
+      mode: config.mockAi ? "mock" : "gemini",
+      aiModel: model,
+      summaryStatus: summary ? "ready" : "pending",
+      // Existing fields remain supported.
+      fileName: files[0].originalname,
+      mimeType: files[0].mimetype,
+      // New multi-page folder metadata.
+      isMultiPage,
+      folderName,
+      pageCount: files.length,
+      pages,
+      contentHash,
+    });
+    if (summary) {
+      applySummaries(record, summary.summaries);
+    }
+    await record.save();
+    return res.json(
+      uploadResponse(record, {
+        message: summary
+          ? isMultiPage
+            ? `${files.length} medical report pages processed as one record.`
+            : "Medical document processed successfully."
+          : "Document read successfully, but the plain-language summary is not ready yet. Open the record to generate it.",
+      })
+    );
+  }
+);
 
 function validId(req, res, next) {
   if (!mongoose.isValidObjectId(req.params.id)) {
@@ -168,6 +263,32 @@ function validId(req, res, next) {
 
 router.get("/records", async (req, res) => {
   const filter = { userId: String(req.user._id) };
+  if (req.query.familyMemberId) {
+  const familyMemberId = String(req.query.familyMemberId);
+
+  if (!mongoose.isValidObjectId(familyMemberId)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid family member ID.",
+    });
+  }
+
+  const member = await FamilyMember.findOne({
+    _id: familyMemberId,
+    userId: req.user._id,
+  });
+
+  if (!member) {
+    return res.status(404).json({
+      success: false,
+      message: "Family member not found.",
+    });
+  }
+
+  filter.familyMemberId = member._id;
+} else {
+  filter.familyMemberId = null;
+}
   if (req.query.category) filter.category = String(req.query.category);
   const records = await HealthRecord.find(filter).select("-extractedText -contentHash").sort({ createdAt: -1 });
   res.json({ success: true, count: records.length, records: records.map(serializeRecord) });

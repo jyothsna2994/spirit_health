@@ -24,9 +24,7 @@ export default function AppTabs() {
           <TabTrigger name="home" href="/" asChild>
             <TabButton>Home</TabButton>
           </TabTrigger>
-          <TabTrigger name="explore" href="/explore" asChild>
-            <TabButton>Explore</TabButton>
-          </TabTrigger>
+          {/* Explore tab disabled: /explore route does not exist */}
         </CustomTabList>
       </TabList>
     </Tabs>

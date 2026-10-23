@@ -4,7 +4,7 @@ const LANGUAGES = {
   en: { name: "English", native: "English", core: true },
   hi: { name: "Hindi", native: "हिन्दी", core: true },
   te: { name: "Telugu", native: "తెలుగు", core: true },
-  ta: { name: "Tamil", native: "தமிழ்" },
+  ta: { name: "Tamil", native: "தமிழ்" ,core: true},
   kn: { name: "Kannada", native: "ಕನ್ನಡ" },
   ml: { name: "Malayalam", native: "മലയാളം" },
   bn: { name: "Bengali", native: "বাংলা" },

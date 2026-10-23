@@ -63,18 +63,14 @@ app.get("/api/ai-test", async (req, res) => {
     res.status(500).json({ success: false, message: "Gemini AI request failed", error: error.message });
   }
 });
-
 app.use("/api/auth", require("./src/routes/auth"));
-
 /* ---------- authenticated (JWT) ---------- */
-
 app.use("/api", require("./src/routes/records"));
 app.use("/api", require("./src/routes/profile"));
-
+// Family Members API
+app.use("/api/family", require("./src/routes/family"));
 /* ---------- errors ---------- */
-
 app.use((req, res) => res.status(404).json({ success: false, message: "Not found" }));
-
 app.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     const tooBig = error.code === "LIMIT_FILE_SIZE";

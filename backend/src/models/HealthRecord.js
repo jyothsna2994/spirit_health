@@ -23,7 +23,14 @@ const summaries = Object.fromEntries(LANGUAGE_CODES.map((code) => [code, String]
 */
 const healthRecordSchema = new mongoose.Schema({
   userId: { type: String, index: true },
-
+  // Optional: links a report to a saved family member.
+// null means the report belongs to the account holder.
+familyMemberId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "FamilyMember",
+  default: null,
+  index: true,
+},
   documentType: String, // display label, e.g. "Lab Report"
   category: { type: String, enum: CATEGORIES, default: "other", index: true },
   title: String,
@@ -79,11 +86,28 @@ const healthRecordSchema = new mongoose.Schema({
   mode: String, // "gemini" | "mock"
   aiModel: String,
   summaryStatus: { type: String, enum: ["ready", "pending"], default: "ready" },
-
   fileName: String,
   mimeType: String,
-  contentHash: { type: String, index: true }, // sha256 of the uploaded file: stops duplicate timeline entries
+// Identifies a multi-page medical report.
+// Existing single-file records remain supported.
+isMultiPage: { type: Boolean, default: false },
+// Name of the medical report folder.
+folderName: { type: String, default: "" },
+// Number of pages belonging to this report.
+pageCount: { type: Number, default: 1 },
+// Metadata for the pages in the folder.
+// Original image data will be stored separately.
+pages: [
+  {
+    pageNumber: Number,
+    fileName: String,
+    mimeType: String,
+    fileSize: Number,
+    storageKey: String,
+  },
+],
 
+ contentHash: { type: String, index: true },
   createdAt: { type: Date, default: Date.now },
 });
 

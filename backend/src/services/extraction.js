@@ -59,8 +59,8 @@ const EXTRACTION_SCHEMA = {
 };
 
 const SYSTEM_INSTRUCTION = `You are the medical-record extraction engine of "Spirit Health Copilot", used in India.
-You receive ONE scanned, photographed or PDF medical document. It can be printed OR HANDWRITTEN, in English, Hindi, Telugu, Tamil or another Indian language, or a mix of scripts.
-Read the whole document (every page) and extract only what is explicitly written.
+You receive one medical report, which may contain a single image, multiple page images, or a PDF. The pages belong to the same report or medical visit and may be printed OR HANDWRITTEN, in English, Hindi, Telugu, Tamil or another Indian language, or a mix of scripts.
+Read every page in the supplied order and extract only what is explicitly written. Combine findings across all pages into one structured report. Do not invent missing information, merge different patients, or discard distinct test results. If pages appear to belong to different patients, mention this in extractionNotes.
 
 Rules:
 - Never invent, guess or "correct" clinical facts. If something is unreadable or absent, use "" (or []). Put doubtful readings (e.g. smudged handwriting) in extractionNotes.
@@ -187,13 +187,57 @@ async function prepareForGemini(file) {
   return { mimeType: "image/jpeg", data };
 }
 
-async function extractDocument(file, { userGender } = {}) {
+async function extractDocument(files, { userGender } = {}) {
   if (config.mockAi) {
     const { mockExtraction } = require("./mockAi");
-    return { extraction: normalizeExtraction(mockExtraction(), { userGender }), model: "mock" };
+
+    return {
+      extraction: normalizeExtraction(mockExtraction(), { userGender }),
+      model: "mock",
+    };
   }
 
-  const prepared = await prepareForGemini(file);
+  // Accept either one file (existing behavior)
+  // or an array of files (new behavior).
+  const fileList = Array.isArray(files) ? files : [files];
+
+  if (
+    fileList.length === 0 ||
+    fileList.length > 5 ||
+    fileList.some((file) => !file?.buffer || !file?.mimetype)
+  ) {
+    throw new Error("Please provide between 1 and 5 valid medical report files.");
+  }
+
+  // Prepare each page using the existing Sharp/PDF processing.
+  const preparedFiles = await Promise.all(
+    fileList.map((file) => prepareForGemini(file))
+  );
+
+  // Keep every page in its original order.
+  const parts = [
+    {
+      text:
+        `Analyze this medical report containing ${fileList.length} file(s). ` +
+        "Read every supplied page in order. " +
+        "Treat them as one medical report and return one combined structured extraction. " +
+        "Preserve distinct test results and do not invent missing clinical facts.",
+    },
+  ];
+
+  for (let i = 0; i < preparedFiles.length; i++) {
+    parts.push({
+      text: `Medical report file ${i + 1} of ${preparedFiles.length}:`,
+    });
+
+    parts.push({
+      inlineData: {
+        mimeType: preparedFiles[i].mimeType,
+        data: preparedFiles[i].data.toString("base64"),
+      },
+    });
+  }
+
   const { data, model } = await generateJson({
     systemInstruction: SYSTEM_INSTRUCTION,
     schema: EXTRACTION_SCHEMA,
@@ -201,14 +245,15 @@ async function extractDocument(file, { userGender } = {}) {
     contents: [
       {
         role: "user",
-        parts: [
-          { inlineData: { mimeType: prepared.mimeType, data: prepared.data.toString("base64") } },
-          { text: "Extract the structured data from this medical document." },
-        ],
+        parts,
       },
     ],
   });
-  return { extraction: normalizeExtraction(data, { userGender }), model };
+
+  return {
+    extraction: normalizeExtraction(data, { userGender }),
+    model,
+  };
 }
 
 module.exports = { extractDocument, normalizeExtraction, explainFrequency, CATEGORY_LABEL };

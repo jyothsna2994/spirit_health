@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import {
   View,
   Text,
@@ -17,16 +17,30 @@ import * as Speech from "expo-speech";
 import { getSession, clearSession } from "../lib/session";
 import { API_URL } from "../constants/api";
 
-type Language = "en" | "te" | "hi";
+type Language = "en" | "te" | "hi" | "ta";
 
 export default function HomeScreen() {
-  const [loading, setLoading] = useState(false);
+  const params = useLocalSearchParams<{
+  familyMemberId?: string;
+  familyMemberName?: string;
+}>();
 
+const familyMemberId =
+  typeof params.familyMemberId === "string"
+    ? params.familyMemberId
+    : "";
+
+const familyMemberName =
+  typeof params.familyMemberName === "string"
+    ? params.familyMemberName
+    : "";
+  const [loading, setLoading] = useState(false);
+  const [showUploadChoices, setShowUploadChoices] = useState(false);
   const [result, setResult] = useState<any>(null);
 
   const [selectedLanguage, setSelectedLanguage] =
     useState<Language>("en");
-
+  const [tamilLoading, setTamilLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
 const [token, setToken] = useState<string | null>(null);
 const [showAccountMenu, setShowAccountMenu] = useState(false);
@@ -45,7 +59,11 @@ const loadHistory = async (authToken: string) => {
     setHistoryLoading(true);
     setHistoryError("");
 
-    const response = await fetch(`${API_URL}/api/records`, {
+    const historyUrl = familyMemberId
+  ? `${API_URL}/api/records?familyMemberId=${encodeURIComponent(familyMemberId)}`
+  : `${API_URL}/api/records`;
+
+const response = await fetch(historyUrl, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${authToken}`,
@@ -125,17 +143,18 @@ const openHistoryRecord = async (recordId: string) => {
       data.record.summaries?.en ||
       data.record.healthSummary ||
       "",
-
     teluguSummary:
       data.record.summaries?.te ||
       data.record.teluguSummary ||
       "",
-
     hindiSummary:
       data.record.summaries?.hi ||
       data.record.hindiSummary ||
       "",
-
+    tamilSummary:
+    data.record.summaries?.ta ||
+    data.record.tamilSummary ||
+  "",
     timelineEvent:
       data.record.timelineEvent || null,
   },
@@ -177,8 +196,12 @@ const loadUser = async () => {
    LOAD USER WHEN DASHBOARD OPENS
 ===================================================== */
 useEffect(() => {
+  setResult(null);
+  setHistory([]);
+  setSelectedHistoryRecord(null);
+  void Speech.stop();
   loadUser();
-}, []);
+}, [familyMemberId]);
   /* =====================================================
      UPLOAD FILE TO BACKEND
   ===================================================== */
@@ -197,6 +220,9 @@ useEffect(() => {
       );
 
       const formData = new FormData();
+      if (familyMemberId) {
+  formData.append("familyMemberId", familyMemberId);
+}
 
       if (Platform.OS === "web") {
         const response =
@@ -319,6 +345,110 @@ useEffect(() => {
       setLoading(false);
     }
   };
+  const pickMultipleReports = async () => {
+  try {
+    const pickerResult = await DocumentPicker.getDocumentAsync({
+      type: ["image/jpeg", "image/png"],
+      multiple: true,
+      copyToCacheDirectory: true,
+    });
+
+    if (pickerResult.canceled || !pickerResult.assets?.length) {
+      return;
+    }
+
+    const files = pickerResult.assets;
+
+    if (files.length > 5) {
+      Alert.alert(
+        "Too Many Pages",
+        "Please select a maximum of 5 medical report images."
+      );
+      return;
+    }
+
+    const totalSize = files.reduce(
+      (total, file) => total + (file.size || 0),
+      0
+    );
+
+    if (totalSize > 25 * 1024 * 1024) {
+      Alert.alert(
+        "Files Too Large",
+        "The combined report must be 25 MB or less."
+      );
+      return;
+    }
+
+    setLoading(true);
+    setResult(null);
+    setProcessingStage("Preparing your medical report pages...");
+
+    const formData = new FormData();
+    if (familyMemberId) {
+  formData.append("familyMemberId", familyMemberId);
+}
+
+    for (const file of files) {
+      const mimeType = file.mimeType || "image/jpeg";
+
+      if (Platform.OS === "web") {
+        const response = await fetch(file.uri);
+        const blob = await response.blob();
+
+        formData.append(
+          "document",
+          new File([blob], file.name, { type: mimeType })
+        );
+      } else {
+        formData.append("document", {
+          uri: file.uri,
+          name: file.name,
+          type: mimeType,
+        } as any);
+      }
+    }
+
+    setProcessingStage("Analyzing all pages with Gemini AI...");
+
+    const response = await fetch(`${API_URL}/api/upload`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Medical report upload failed.");
+    }
+
+    setResult(data);
+    setProcessingStage("");
+
+    Alert.alert(
+      "Report Uploaded",
+      `${files.length} page(s) processed as one medical record.`
+    );
+
+    // Refresh your existing health history.
+    if (token) {
+  await loadHistory(token);
+}
+  } catch (error: any) {
+    console.error("Multi-page upload error:", error);
+
+    Alert.alert(
+      "Upload Error",
+      error?.message || "Could not upload medical report pages."
+    );
+  } finally {
+    setLoading(false);
+    setProcessingStage("");
+  }
+};
 
   /* =====================================================
      PICK DOCUMENT
@@ -443,6 +573,61 @@ useEffect(() => {
   /* =====================================================
      LANGUAGE
   ===================================================== */
+  useEffect(() => {
+  const loadTamilSummary = async () => {
+    if (
+      selectedLanguage !== "ta" ||
+      !result?.data ||
+      result.data.tamilSummary ||
+      !result.recordId ||
+      !token
+    ) {
+      return;
+    }
+
+    try {
+      setTamilLoading(true);
+
+      const response = await fetch(
+        `${API_URL}/api/records/${result.recordId}/summary`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ lang: "ta" }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success || !data.summary) {
+        throw new Error(data.message || "Tamil summary unavailable.");
+      }
+
+      setResult((previous: any) => {
+        if (!previous || previous.recordId !== result.recordId) {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          data: {
+            ...previous.data,
+            tamilSummary: data.summary,
+          },
+        };
+      });
+    } catch (error) {
+      console.error("Tamil summary error:", error);
+    } finally {
+      setTamilLoading(false);
+    }
+  };
+
+  void loadTamilSummary();
+}, [selectedLanguage, result?.recordId, result?.data?.tamilSummary, token]);
 
   const getSpeechText =
     () => {
@@ -473,7 +658,14 @@ useEffect(() => {
           "हिंदी में विवरण अभी उपलब्ध नहीं है।"
         );
       }
-
+     if (selectedLanguage === "ta") {
+  return (
+    result.data.tamilSummary ||
+    (tamilLoading
+      ? "தமிழ் விளக்கம் தயாராகிறது..."
+      : "தமிழ் விளக்கம் கிடைக்கவில்லை.")
+  );
+}
       return (
         result.data
           .healthSummary ||
@@ -496,6 +688,9 @@ useEffect(() => {
       ) {
         return "hi-IN";
       }
+      if (selectedLanguage === "ta") {
+  return "ta-IN";
+}
 
       return "en-IN";
     };
@@ -515,6 +710,9 @@ useEffect(() => {
       ) {
         return "हिन्दी";
       }
+      if (selectedLanguage === "ta") {
+  return "தமிழ்";
+}
 
       return "English";
     };
@@ -640,11 +838,9 @@ useEffect(() => {
           style={styles.menuItem}
           onPress={() => {
             setShowAccountMenu(false);
-            Alert.alert(
-              "Family Members",
-              "Family member accounts will be available here."
-            );
-          }}
+            router.push("/family");
+           }}
+
         >
           <Text style={styles.menuIcon}>
             👨‍👩‍👧
@@ -728,8 +924,9 @@ useEffect(() => {
                   styles.userGreeting
                 }
               >
-                Hello,{" "}
-                {user.fullName} 👋
+               {familyMemberId
+  ? `${familyMemberName || "Family Member"}'s Health Dashboard 👋`
+  : `Hello, ${user.fullName} 👋`}
               </Text>
 
               <Text
@@ -737,7 +934,9 @@ useEffect(() => {
                   styles.userEmail
                 }
               >
-                {user.email}
+              {familyMemberId
+  ? "Family Member's Medical Records"
+  : user.email}
               </Text>
             </View>
 
@@ -830,9 +1029,7 @@ useEffect(() => {
               style={
                 styles.actionButton
               }
-              onPress={
-                  pickDocument
-              }
+              onPress={() => setShowUploadChoices(!showUploadChoices)}
               disabled={
                 loading
               }
@@ -867,7 +1064,6 @@ useEffect(() => {
                 PDF / Image
               </Text>
             </TouchableOpacity>
-
             {/* CAMERA */}
 
             <TouchableOpacity
@@ -915,7 +1111,51 @@ useEffect(() => {
             </TouchableOpacity>
 
           </View>
+            {/* UPLOAD CHOICES */}
 
+          {showUploadChoices && (
+            <View
+              style={{
+                marginTop: 12,
+                width: "100%",
+                gap: 8,
+              }}
+            >
+              <TouchableOpacity
+                disabled={loading}
+                onPress={() => {
+                  setShowUploadChoices(false);
+                  pickDocument();
+                }}
+                style={{
+                  padding: 12,
+                  borderRadius: 8,
+                  backgroundColor: "#EEF2FF",
+                }}
+              >
+                <Text style={{ color: "#1E3A8A" }}>
+                  📄 Single Image / PDF
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                disabled={loading}
+                onPress={() => {
+                  setShowUploadChoices(false);
+                  pickMultipleReports();
+                }}
+                style={{
+                  padding: 12,
+                  borderRadius: 8,
+                  backgroundColor: "#EEF2FF",
+                }}
+              >
+                <Text style={{ color: "#1E3A8A" }}>
+                  📑 Multiple Images (Up to 5)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
           {/* PROCESSING */}
 
           {loading && (
@@ -948,6 +1188,24 @@ useEffect(() => {
             </View>
           )}
         </View>
+        {Boolean(familyMemberId) && (
+  <View style={styles.userCard}>
+    <View>
+      <Text style={styles.userGreeting}>
+        👨‍👩‍👧 {familyMemberName || "Family Member"}'s Dashboard
+      </Text>
+      <Text style={styles.userEmail}>
+        Medical records and AI health analysis
+      </Text>
+    </View>
+
+    <TouchableOpacity onPress={() => router.push("/family")}>
+      <Text style={{ color: "#1769AA", fontWeight: "700" }}>
+  ← Family
+</Text>
+    </TouchableOpacity>
+  </View>
+)}
         {/* PREVIOUS HEALTH RECORDS */}
 <View style={styles.historyCard}>
   <View style={styles.historyHeader}>
@@ -1271,6 +1529,23 @@ useEffect(() => {
                     हिन्दी
                   </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+  style={[
+    styles.languageButton,
+    selectedLanguage === "ta" && styles.selectedLanguage,
+  ]}
+  onPress={() => setSelectedLanguage("ta")}
+>
+  <Text style={styles.languageEmoji}>🇮🇳</Text>
+  <Text
+    style={[
+      styles.languageText,
+      selectedLanguage === "ta" && styles.selectedLanguageText,
+    ]}
+  >
+    தமிழ்
+  </Text>
+</TouchableOpacity>
               </View>
 
               {/* VOICE */}
