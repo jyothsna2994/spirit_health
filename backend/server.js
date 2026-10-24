@@ -67,7 +67,8 @@ app.use("/api/auth", require("./src/routes/auth"));
 /* ---------- authenticated (JWT) ---------- */
 app.use("/api", require("./src/routes/records"));
 app.use("/api", require("./src/routes/profile"));
-// Family Members API
+app.use("/api", require("./src/routes/copilot"));
+app.use("/api/reminders", require("./src/routes/reminders"));
 app.use("/api/family", require("./src/routes/family"));
 /* ---------- errors ---------- */
 app.use((req, res) => res.status(404).json({ success: false, message: "Not found" }));

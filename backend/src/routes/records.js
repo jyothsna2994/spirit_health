@@ -172,20 +172,24 @@ if (familyMemberId) {
     } catch (error) {
       return aiFailure(res, error, files[0]);
     }
-    const hasContent =
-      extraction.medicines.length ||
-      extraction.tests.length ||
-      extraction.diagnoses.length ||
-      extraction.advice.length ||
-      extraction.followUp;
-    if (!hasContent) {
-      return res.status(422).json({
-        success: false,
-        message:
-          "We could not find medical information in these files. Please upload clearer images.",
-        extractionNotes: extraction.extractionNotes,
-      });
-    }
+    
+const hasContent = Boolean(
+  extraction.medicines?.length ||
+  extraction.tests?.length ||
+  extraction.diagnoses?.length ||
+  extraction.advice?.length ||
+  extraction.followUp
+);
+
+if (!hasContent) {
+  return res.status(422).json({
+    success: false,
+    message:
+      "⚠️ Invalid Health Report. The uploaded file does not appear to contain medical information. Please upload a valid prescription, lab report, discharge summary, or other health record.",
+    extractionNotes: extraction.extractionNotes,
+  });
+}
+
     let summary = null;
     try {
       summary = await summarizeRecord(extraction, CORE_LANGUAGES);

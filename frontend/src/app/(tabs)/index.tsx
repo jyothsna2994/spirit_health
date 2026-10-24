@@ -490,7 +490,52 @@ export default function HomeScreen() {
         <View style={{ marginBottom: 10 }}>
           <LanguagePicker />
         </View>
+        
+{/* MEDICINE & APPOINTMENT REMINDERS */}
+<TouchableOpacity
+  style={{
+    backgroundColor: "#1769AA",
+    borderRadius: 15,
+    padding: 17,
+    marginBottom: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  }}
+  onPress={() => router.push("/reminders")}
+  accessibilityRole="button"
+>
+  <View style={{ flex: 1 }}>
+    <Text
+      style={{
+        color: "#FFFFFF",
+        fontSize: 16,
+        fontWeight: "800",
+      }}
+    >
+      💊 Medicine & Appointment Reminders
+    </Text>
 
+    <Text
+      style={{
+        color: "#D5E3EF",
+        fontSize: 12,
+        marginTop: 5,
+      }}
+    >
+      Manage your medicines and doctor visits
+    </Text>
+  </View>
+
+  <Text
+    style={{
+      color: "#FFFFFF",
+      fontSize: 24,
+      marginLeft: 10,
+    }}
+  > 
+  </Text>
+</TouchableOpacity>
         {/* =================================================
             UPLOAD SECTION
         ================================================= */}

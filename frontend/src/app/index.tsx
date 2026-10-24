@@ -45,7 +45,7 @@ const familyMemberName =
 const [token, setToken] = useState<string | null>(null);
 const [showAccountMenu, setShowAccountMenu] = useState(false);
 const [processingStage, setProcessingStage] = useState("");
-
+const [uploadError, setUploadError] = useState("");
 const [history, setHistory] = useState<any[]>([]);
 const [historyLoading, setHistoryLoading] = useState(false);
 const [selectedHistoryRecord, setSelectedHistoryRecord] = useState<any>(null);
@@ -214,6 +214,7 @@ useEffect(() => {
     try {
       setLoading(true);
       setResult(null);
+      setUploadError("");
 
       setProcessingStage(
         "Preparing your medical document..."
@@ -333,6 +334,9 @@ useEffect(() => {
         "Upload error:",
         error
       );
+      setUploadError(
+  error?.message || "Could not process the uploaded document."
+);
 
       setProcessingStage("");
 
@@ -439,6 +443,9 @@ useEffect(() => {
 }
   } catch (error: any) {
     console.error("Multi-page upload error:", error);
+    setUploadError(
+  error?.message || "Could not upload medical report pages."
+);
 
     Alert.alert(
       "Upload Error",
@@ -970,13 +977,122 @@ useEffect(() => {
   <Text style={styles.doctorEmoji}>
     👨‍⚕️
   </Text>
-
 </View>
 
-        {/* =================================================
-            UPLOAD SECTION
-        ================================================= */}
+{/* ROUND 2 - HEALTH COPILOT */}
+<TouchableOpacity
+  onPress={() =>
+    router.push({
+      pathname: "/copilot",
+      params: {
+        familyMemberId: familyMemberId || "",
+        familyMemberName: familyMemberName || "",
+      },
+    })
+  }
+  style={{
+    backgroundColor: "#1769AA",
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  }}
+>
+  <View style={{ flex: 1 }}>
+    <Text
+      style={{
+        color: "#FFFFFF",
+        fontSize: 17,
+        fontWeight: "800",
+      }}
+    >
+      🩺 Chat with Spirit Mitra 💙 
+    </Text>
 
+    <Text
+      style={{
+        color: "#DCEEFF",
+        fontSize: 12,
+        marginTop: 5,
+      }}
+    >
+      Ask questions about your saved medical records
+    </Text>
+  </View>
+
+  <Text
+    style={{
+      color: "#FFFFFF",
+      fontSize: 23,
+      marginLeft: 12,
+    }}
+  >
+    →
+  </Text>
+</TouchableOpacity>
+
+{/* MEDICINE & APPOINTMENT REMINDERS */}
+<TouchableOpacity
+  onPress={() =>
+    router.push({
+      pathname: "/reminders",
+      params: {
+        familyMemberId: familyMemberId || "",
+        familyMemberName: familyMemberName || "",
+      },
+    })
+  }
+  style={{
+    backgroundColor: "#1769AA",
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  }}
+  accessibilityRole="button"
+>
+  <View style={{ flex: 1 }}>
+    <Text
+      style={{
+        color: "#FFFFFF",
+        fontSize: 17,
+        fontWeight: "800",
+      }}
+    >
+      💊 Medicine & Appointment Reminders
+    </Text>
+
+    <Text
+      style={{
+        color: "#DCEEFF",
+        fontSize: 12,
+        marginTop: 5,
+      }}
+    >
+      {familyMemberId
+        ? `Manage reminders for ${familyMemberName || "Family Member"}`
+        : "Manage your medicines and doctor visits"}
+    </Text>
+  </View>
+
+  <Text
+    style={{
+      color: "#FFFFFF",
+      fontSize: 23,
+      marginLeft: 12,
+    }}
+  >
+    →
+  </Text>
+</TouchableOpacity>
+
+{/* =================================================
+    UPLOAD SECTION
+ ================================================= */}
         <View
           style={
             styles.uploadCard
@@ -1156,6 +1272,45 @@ useEffect(() => {
               </TouchableOpacity>
             </View>
           )}
+          
+{Boolean(uploadError) && (
+  <View
+    accessibilityRole="alert"
+    style={{
+      width: "100%",
+      marginTop: 14,
+      backgroundColor: "#FFF1F0",
+      borderRadius: 10,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: "#B42318",
+    }}
+  >
+    <Text
+      style={{
+        color: "#B42318",
+        fontSize: 15,
+        fontWeight: "800",
+        marginBottom: 6,
+      }}
+    >
+      ⚠️ {uploadError.toLowerCase().includes("invalid health report")
+        ? "Invalid Health Report"
+        : "Upload Error"}
+    </Text>
+
+    <Text
+      style={{
+        color: "#B42318",
+        fontSize: 13,
+        lineHeight: 20,
+      }}
+    >
+      {uploadError.replace(/^⚠️\s*Invalid Health Report\.?\s*/i, "")}
+    </Text>
+  </View>
+)}
+
           {/* PROCESSING */}
 
           {loading && (

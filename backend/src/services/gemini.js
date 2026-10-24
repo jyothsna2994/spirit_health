@@ -37,10 +37,20 @@ function modelOrder() {
  * Call Gemini, trying the next configured model when one is rate-limited, missing or slow.
  * Returns { text, model }.
  */
-async function generate({ contents, config: genConfig = {}, timeoutMs }) {
+async function generate({
+  contents,
+  config: genConfig = {},
+  timeoutMs = 20000,
+  maxModels,
+}) {
   let lastError;
 
-  for (const model of modelOrder()) {
+  const modelsToTry =
+  Number.isInteger(maxModels) && maxModels > 0
+    ? modelOrder().slice(0, maxModels)
+    : modelOrder();
+
+for (const model of modelsToTry) {
     const controller = new AbortController();
     let timer;
     try {

@@ -23,17 +23,26 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    "plugins": [
-      "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
-        }
-      ]
-    ],
+    
+"plugins": [
+  "expo-router",
+  [
+    "expo-notifications",
+    {
+      "sounds": ["./assets/sounds/tik-tik.wav"],
+      "defaultChannel": "spirit-health-reminders"
+    }
+  ],
+  [
+    "expo-splash-screen",
+    {
+      "backgroundColor": "#208AEF",
+      "image": "./assets/images/splash-icon.png",
+      "imageWidth": 76
+    }
+  ]
+],
+
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
